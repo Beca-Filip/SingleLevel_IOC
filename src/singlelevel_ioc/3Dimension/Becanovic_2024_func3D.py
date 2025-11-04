@@ -1,0 +1,393 @@
+import casadi as ca
+import numpy as np
+from roboticstoolbox import DHRobot
+from spatialmath import SE3
+
+def make_ndof_model(n, N, dh_params):
+    if N <= 2:
+        raise ValueError("Need N > 2.")
+    
+    opti = ca.Opti()
+
+    var = {}
+
+    # -------------------------------
+    # Parameters
+    # -------------------------------
+    params = {}
+    params['dt'] = opti.parameter(1)
+    params['q0'] = opti.parameter(n)
+    params['dq0'] = opti.parameter(n)
+    params['L'] = opti.parameter(n)
+    params['COM'] = opti.parameter(3, n)
+    params['M'] = opti.parameter(n)
+    params['I'] = opti.parameter(n)
+    params['gravity'] = opti.parameter(3)
+    params['goal'] = opti.parameter(3, 1)
+
+    params['Fext'] = []
+    for ii in range(n):
+        params['Fext'].append(opti.parameter(3, N - 2))
+
+
+   
+    var['parameters'] = params
+
+    # -------------------------------
+    # Variables
+    # -------------------------------
+    variables = {}
+    variables['ddq'] = opti.variable(n, N - 2)
+    variables['dq'] = opti.variable(n, N - 1)
+    variables['q'] = opti.variable(n, N)
+    var['variables'] = variables
+
+    # -------------------------------
+    # Functions
+    # -------------------------------
+    functions = {}
+    functions['q'] = variables['q']
+    functions['dq'] = ca.horzcat(variables['dq'], ca.DM.zeros(n, 1))
+    functions['ddq'] = ca.horzcat(variables['ddq'], ca.DM.zeros(n, 2))
+
+    functions['Fext'] = []
+    for ii in range(n):
+        functions['Fext'].append(
+            ca.horzcat(params['Fext'][ii], ca.DM.zeros(3, 2))
+        )
+     
+    # Call your custom dynamics
+    (functions['P'], 
+     functions['V'], 
+    functions['A'], 
+    functions['Pcom'],functions['Vcom'], 
+    functions['Acom'],functions['Fcom']) = forward_propagation( 
+         functions['q'],
+         functions['dq'],
+         functions['ddq'],
+         dh_params, 
+         params['M'], 
+         params['COM'], 
+         params['I'], 
+         params['gravity']
+     )
+
+
+    functions['F'] = backward_propagation(
+        functions['Fcom'],
+        functions['Fext'],
+        functions['Pcom'],
+        functions['P'],
+        params['M'],
+        params['gravity'],
+        dh_params
+    )
+
+    # -------------------------------
+    # Compute model torques
+    # -------------------------------
+    functions['model_tau'] = ca.MX.zeros(n, N)
+    for ii in range(n):
+        functions['model_tau'][ii, :] = functions['F'][ii][2, :]
+
+    var['functions'] = functions
+
+    # -------------------------------
+    # Constraints
+    # -------------------------------
+    constraints = {}
+    constraints['initial_pos'] = variables['q'][:, 0] - params['q0']
+    constraints['initial_vel'] = variables['dq'][:, 0] - params['dq0']
+    constraints['dynamics_pos'] = variables['q'][:, 1:N] - variables['q'][:, 0:N-1] - variables['dq'] * params['dt']
+    constraints['dynamics_vel'] = variables['dq'][:, 1:N-1] - variables['dq'][:, 0:N-2] - variables['ddq'] * params['dt']
+    constraints['goal_ee'] = functions['P'][-1][0:3, -1] - params['goal']
+
+    var['constraints'] = constraints
+
+    # -------------------------------
+    # Costs
+    # -------------------------------
+    costs = {}
+    tau = functions['model_tau']
+    dq = variables['dq']
+    ddq = variables['ddq']
+    Vee = functions['V'][-1]
+
+    costs['joint_torque_cost'] = ca.sumsqr(tau) / N / n / 8e1
+    costs['joint_vel_cost'] = ca.sumsqr(dq) / N / n / 3e0
+    costs['ee_vel_cost'] = ca.sumsqr(Vee) / N / 2e1
+    costs['joint_torque_change_cost'] = ca.sumsqr(tau[:, 1:] - tau[:, :-1]) / (params['dt'] ** 2) / N / n / 6e5
+    costs['joint_jerk_cost'] = ca.sumsqr(ddq[:, 1:] - ddq[:, :-1]) / (params['dt'] ** 2) / N / n / 2e6
+
+    var['costs'] = costs
+
+    # -------------------------------
+    # Add constraints to opti
+    # -------------------------------
+    opti.subject_to(constraints['initial_pos'] == 0)
+    opti.subject_to(constraints['initial_vel'] == 0)
+    opti.subject_to(constraints['dynamics_pos'] == 0)
+    opti.subject_to(constraints['dynamics_vel'] == 0)
+    opti.subject_to(constraints['goal_ee'] == 0)
+
+    return opti, var
+
+def mdh_transform(a, alpha, d, theta):
+    ct = ca.cos(theta)
+    st = ca.sin(theta)
+    ca_ = ca.cos(alpha)
+    sa = ca.sin(alpha)
+
+    return ca.vertcat(
+        ca.horzcat(ct, -st, 0, a),
+        ca.horzcat(st*ca_, ct*ca_, -sa, -d*sa),
+        ca.horzcat(st*sa, ct*sa, ca_, d*ca_),
+        ca.horzcat(0,0,0,1)
+    )
+
+
+def forward_propagation(q, dq, ddq, dh_params, M, COM, I, gravity):
+    """
+    Compute positions, velocities, accelerations of joints in 3D
+    using symbolic DH parameters (CasADi MX).
+
+    Inputs:
+        q   : n x N joint positions
+        dq  : n x N joint velocities
+        ddq : n x N joint accelerations
+        dh_params : list of n tuples (a, alpha, d) 
+                    (link lengths, twist, offset)
+
+    Outputs:
+        P : list of n CasADi MX (3 x N) joint positions
+        V : list of n CasADi MX (3 x N) joint velocities
+        A : list of n CasADi MX (3 x N) joint accelerations
+    """
+
+    n, N = q.shape
+    g = gravity.reshape((3, 1)) if isinstance(gravity, ca.MX) else ca.MX(gravity).reshape((3, 1))
+
+    # Initialize outputs
+    P = [ca.MX.zeros(3, N) for _ in range(n+1)]
+    V = [ca.MX.zeros(3, N) for _ in range(n+1)]
+    A = [ca.MX.zeros(3, N) for _ in range(n+1)]
+    
+    Pcom, Vcom, Acom, Fcom = [], [], [], []
+    
+
+    for t in range(N):
+        T_prev = ca.MX.eye(4)  # base frame
+        R_prev = T_prev[0:3, 0:3]
+        p_prev = T_prev[0:3, 3]
+
+        v_prev = ca.MX.zeros(3)
+        a_prev = ca.MX.zeros(3)
+        omega_prev = ca.MX.zeros(3)
+        alpha_prev = ca.MX.zeros(3)
+
+        for i in range(n):
+            a_i, alpha_i, d_i = dh_params[i]
+            theta_i = q[i, t]
+
+            # Transformation i-1 -> i
+            T_i = mdh_transform(a_i, alpha_i, d_i, theta_i)
+            R_i = T_prev[0:3, 0:3] @ T_i[0:3, 0:3]
+            p_i = p_prev + T_prev[0:3, 0:3] @ T_i[0:3, 3]
+            z_prev = T_prev[0:3, 2]
+
+            # Angular velocity and acceleration (revolute joint)
+            omega_i = omega_prev + dq[i, t] * z_prev
+            alpha_i = alpha_prev + ddq[i, t] * z_prev + ca.cross(omega_prev, dq[i, t] * z_prev)
+
+            # Linear velocity and acceleration of joint i
+            v_i = v_prev + ca.cross(omega_prev, p_i - p_prev)
+            a_i_lin = a_prev + ca.cross(alpha_prev, p_i - p_prev) + ca.cross(omega_prev, ca.cross(omega_prev, p_i - p_prev))
+
+            # --- Compute COM quantities ---
+            r_com_i = R_i @ COM[:, i]
+            p_com_i = p_i + r_com_i
+            v_com_i = v_i + ca.cross(omega_i, r_com_i)
+            a_com_i = a_i_lin + ca.cross(alpha_i, r_com_i) + ca.cross(omega_i, ca.cross(omega_i, r_com_i))
+
+            # Force at COM
+            Fcom_i = M[i] * (a_com_i - g)
+
+            # Store results
+            P[i+1][:, t] = p_i
+            V[i+1][:, t] = v_i
+            A[i+1][:, t] = a_i_lin
+            if len(Pcom) < n:  # initialize once
+                Pcom.append(ca.MX.zeros(3, N))
+                Vcom.append(ca.MX.zeros(3, N))
+                Acom.append(ca.MX.zeros(3, N))
+                Fcom.append(ca.MX.zeros(3, N))
+
+            Pcom[i][:, t] = p_com_i
+            Vcom[i][:, t] = v_com_i
+            Acom[i][:, t] = a_com_i
+            Fcom[i][:, t] = Fcom_i
+
+            # Prepare for next iteration
+            T_prev = T_prev @ T_i
+            R_prev = R_i
+            p_prev = p_i
+            v_prev = v_i
+            a_prev = a_i_lin
+            omega_prev = omega_i
+            alpha_prev = alpha_i
+            
+    print(type(Fcom), type(Fcom[0]), len(Fcom))
+    print(type(Pcom), type(Pcom[0]), len(Pcom))
+    print(type(P), type(P[0]), len(P))
+
+
+    return P, V, A, Pcom, Vcom, Acom, Fcom
+
+
+
+
+def backward_propagation(Fcom, Fext, Pcom, P, M, gravity, dh_params):
+    """
+    3D version of backward_propagation using CasADi MX.
+
+    Computes the total forces and moments (torques) at each joint
+    by recursively propagating from the end-effector toward the base.
+
+    Inputs:
+        Fcom    : list of n CasADi MX (3 x N), inertial forces at each link's COM
+        Fext    : list of n CasADi MX (3 x N), external forces applied to each link
+        Pcom    : list of n CasADi MX (3 x N), COM positions of each link
+        P       : list of n+1 CasADi MX (3 x N), joint positions
+        M       : (n,) link masses
+        gravity : (3,) CasADi MX or DM, gravity vector (e.g., [0, 0, -9.81])
+
+    Outputs:
+        F : list of n+1 CasADi MX (3 x N), total forces at each joint
+        N : list of n+1 CasADi MX (3 x N), total moments (torques) at each joint
+    """
+
+    n = len(Fcom)
+    Nsamples = Fcom[0].shape[1]
+
+    # Initialize force and moment containers
+    F = [ca.MX.zeros(3, Nsamples) for _ in range(n + 1)]
+    Nmom = [ca.MX.zeros(3, Nsamples) for _ in range(n + 1)]
+
+    # Backward recursion (from end-effector to base)
+    for i in range(n - 1, -1, -1):
+        # Position vectors
+        r_c = Pcom[i] - P[i]       # from joint i to COM_i
+        r_p = P[i + 1] - Pcom[i]   # from COM_i to next joint
+
+        # Compute total force on joint i
+        F[i] = (
+            Fcom[i]                       # inertial force from acceleration
+            + F[i + 1]                    # transmitted force from next link
+            - M[i] * gravity.reshape((3, 1))  # gravitational force
+            - Fext[i]                     # external forces acting on this link
+        )
+
+        # Compute total moment (torque) at joint i
+        Nmom[i] = (
+            Nmom[i + 1]                          # propagated moment from next joint
+            + ca.cross(r_c, Fcom[i])             # moment due to COM offset
+            + ca.cross(r_p, F[i + 1])            # moment from distal link
+        )
+
+    return F
+
+def instantiate_ndof_model(var, opti, dt, q0, dq0, L, COM, M, I, gravity, Fext, goal, ddq, dq, q):
+    """
+    Python translation of MATLAB instantiate_ndof_model.
+    
+    Sets all parameter values and initial guesses in the CasADi Opti instance.
+
+    Inputs:
+        var     : dictionary returned by make_ndof_model()
+        opti     : casadi.Opti() instance
+        dt       : scalar timestep
+        q0, dq0  : (n,) initial position and velocity
+        L, COM, M, I : robot link parameters
+        gravity  : (2,) gravity vector
+        Fext     : list of n arrays (3 x N-2) external forces
+        goal     : (2,1) target end-effector position
+        ddq, dq, q : initial guesses for variables
+    """
+
+    n = q0.shape[0]
+
+    # -------------------------------
+    # Parameters
+    # -------------------------------
+    p = var['parameters']
+    opti.set_value(p['dt'], dt)
+    opti.set_value(p['q0'], q0)
+    opti.set_value(p['dq0'], dq0)
+    opti.set_value(p['L'], L)
+    opti.set_value(p['COM'], COM)
+    opti.set_value(p['M'], M)
+    opti.set_value(p['I'], I)
+    opti.set_value(p['gravity'], gravity)
+
+    for ii in range(n):
+        opti.set_value(p['Fext'][ii], Fext[ii])
+
+    opti.set_value(p['goal'], goal)
+
+    # -------------------------------
+    # Variables (initial guesses)
+    # -------------------------------
+    v = var['variables']
+    opti.set_initial(v['ddq'], ddq)
+    opti.set_initial(v['dq'], dq)
+    opti.set_initial(v['q'], q)
+    
+
+def numerize_var(model_var, opti, initial_flag=False):
+    """
+    Evaluate all symbolic CasADi variables/parameters/functions in a model
+    into numeric CasADi DM arrays, either at the current solution or at
+    the initial guess.
+
+    Args:
+        model_var (dict): The structure returned by make_ndof_model().
+        opti (casadi.Opti): The CasADi Opti instance.
+        initial_flag (bool, optional): 
+            If True, evaluate using opti.initial(). 
+            Otherwise, use the optimized values. Default: False.
+
+    Returns:
+        dict: A dictionary 'num_var' with the same structure as model_var,
+              but all CasADi symbols replaced by numeric DM values.
+    """
+
+    num_var = {}
+
+    # Loop over main categories: 'variables', 'parameters', 'functions'
+    for category_name, category_content in model_var.items():
+        num_var[category_name] = {}
+
+        # Loop over computables within each category
+        for computable_name, computable_value in category_content.items():
+            # Case 1: list (cell array in MATLAB)
+            if isinstance(computable_value, (list, tuple)):
+                num_var[category_name][computable_name] = []
+                for item in computable_value:
+                    if not initial_flag:
+                        num_var[category_name][computable_name].append(opti.value(item))
+                    else:
+                        num_var[category_name][computable_name].append(
+                            opti.value(item, opti.initial())
+                        )
+
+            # Case 2: direct symbolic expression (MX/DM)
+            else:
+                if not initial_flag:
+                    num_var[category_name][computable_name] = opti.value(computable_value)
+                else:
+                    num_var[category_name][computable_name] = opti.value(
+                        computable_value, opti.initial()
+                    )
+
+    return num_var
+
