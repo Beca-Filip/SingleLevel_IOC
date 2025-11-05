@@ -57,15 +57,15 @@ opti, var = make_ndof_model(n, N, dh_param)
 # Instanciate 
 instantiate_ndof_model(var, opti, dt, q0, dq0, L, COM, M, I, gravity, Fext, goal, ddq, dq, q);
 
-opti.solver('ipopt'), {
-    'ipopt.print_level': 5,
-    'ipopt.max_iter': 500,
-    'ipopt.tol': 1e-6,
-    'ipopt.acceptable_tol': 1e-5,
-    'ipopt.acceptable_constr_viol_tol': 1e-3,
-    'ipopt.constr_viol_tol': 1e-4,
-    'ipopt.acceptable_obj_change_tol': 1e-4
-}
+opti.solver('ipopt')#, {
+#     'ipopt.print_level': 5,
+#     'ipopt.max_iter': 500,
+#     'ipopt.tol': 1e-6,
+#     'ipopt.acceptable_tol': 1e-5,
+#     'ipopt.acceptable_constr_viol_tol': 1e-3,
+#     'ipopt.constr_viol_tol': 1e-4,
+#     'ipopt.acceptable_obj_change_tol': 1e-4
+# }
 
 
 # # Optimize joint velocity

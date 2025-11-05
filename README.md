@@ -62,6 +62,9 @@ Plots:
 - Segment velocities
 
 
+
+**In 2 dimensions :** 
+
 Joint trajectories are plotted over time using `plot_joint_traj_from_vars()`.
 
 ![Joint trajectories over time](img/joint_traj.png)
@@ -80,3 +83,24 @@ Estimated segment velocity along the motion :
 
 *Figure: Segment velocities.*
 
+
+
+**In 3 dimensions (using a DH model):**
+
+Joint trajectories are plotted over time using `plot_joint_traj_from_vars()`.
+
+![Joint trajectories over time](img/joint_traj3D.png)
+
+*Figure: Joint positions (q), velocities (dq), accelerations (ddq), and torques (τ) plotted over the trajectory.*
+
+Robot configuration throught the motion 
+
+![Robot Snapshot](img/arm_snapshot3D.png)
+
+*Figure: 2 DoF robot arm snapshot.*
+
+Estimated segment velocity along the motion : 
+
+![Segment Velocities](img/seg_vel3D.png)
+
+*Figure: Segment velocities.*

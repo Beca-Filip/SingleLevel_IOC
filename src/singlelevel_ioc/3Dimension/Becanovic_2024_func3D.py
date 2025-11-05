@@ -236,6 +236,7 @@ def forward_propagation(q, dq, ddq, dh_params, M, COM, I, gravity):
             a_prev = a_i_lin
             omega_prev = omega_i
             alpha_prev = alpha_i
+    print(P)
 
     return P, V, A, Pcom, Vcom, Acom, Fcom
 
