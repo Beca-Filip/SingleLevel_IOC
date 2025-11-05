@@ -229,20 +229,19 @@ print(print_str)
 # -----------------------------
 # Snapshots plots
 # -----------------------------
-fig = plt.figure(figsize=(12, 8))
-ax = plt.axes(projection='3d')
-ax.set_xlabel('X')
-ax.set_ylabel('Y')
-ax.set_zlabel('Z')
-ax.set_aspect('equal')
-ax.view_init(elev=30, azim=-60)
-
-plot_snapshots_from_vars(fig, num_vars_1, 5)
-# plot 3D goal point on the 3D axes
-ax.scatter(float(goal[0]), float(goal[1]), float(goal[2]), c='r', s=200, marker='o', depthshade=True)
-
-plt.axis('equal')
-plt.title("Snapshots: num_vars_1")
+# fig = plt.figure(figsize=(12, 8))
+# ax = plt.axes(projection='3d')
+# ax.set_xlabel('X')
+# ax.set_ylabel('Y')
+# ax.set_zlabel('Z')
+# ax.set_aspect('equal')
+# ax.view_init(elev=30, azim=-60)
+# plot_snapshots_from_vars(fig, num_vars_1, 5)
+# # plot 3D goal point on the 3D axes
+# ax.scatter(float(goal[0]), float(goal[1]), float(goal[2]), c='r', s=200, marker='o', depthshade=True, label='Goal')
+# plt.legend()
+# plt.axis('equal')
+# plt.title("Snapshots: num_vars_1")
 
 fig = plt.figure(figsize=(12, 8))
 ax = plt.axes(projection='3d')
@@ -252,7 +251,9 @@ ax.set_zlabel('Z')
 ax.set_aspect('equal')
 ax.view_init(elev=30, azim=-60)
 plot_snapshots_from_vars(fig, num_vars_ioc, 5)
-ax.scatter(float(goal[0]), float(goal[1]), float(goal[2]), c='r', s=200, marker='o', depthshade=True)
+ax = plt.gca()   # now refers to the 3D axes created inside the function
+ax.scatter(goal[0], goal[1], goal[2], c='r', s=200, marker='o', depthshade=True, label='Goal')
+plt.legend()
 plt.axis('equal')
 plt.title("Snapshots: num_vars_ioc")
 

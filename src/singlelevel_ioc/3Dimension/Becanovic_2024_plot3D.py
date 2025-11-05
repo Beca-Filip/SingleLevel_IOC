@@ -14,6 +14,8 @@ def plot_snapshots_from_vars(fig, var, nsnapshots=10):
     q = var["variables"]["q"]
     n, N = q.shape  # number of joints, timesteps
 
+    print(var["functions"]["Pcom"])
+
     ax = fig.add_subplot(111, projection='3d')
 
     # -----------------------------
@@ -27,6 +29,7 @@ def plot_snapshots_from_vars(fig, var, nsnapshots=10):
     # Segment COM trajectories
     # -----------------------------
     for ii in range(n):
+        print(ii)
         Pcom = var["functions"]["Pcom"][ii]
         ax.plot(Pcom[0, :], Pcom[1, :], Pcom[2, :],
                 color='c', linewidth=2, alpha=0.2)
@@ -34,10 +37,10 @@ def plot_snapshots_from_vars(fig, var, nsnapshots=10):
     # -----------------------------
     # Total COM trajectory (if exists)
     # -----------------------------
-    if "Pcomtotal" in var["functions"]:
-        Pcomtotal = var["functions"]["Pcomtotal"]
-        ax.plot(Pcomtotal[0, :], Pcomtotal[1, :], Pcomtotal[2, :],
-                color=[0.2, 0.7, 0.05], linewidth=2, label="Total COM")
+    # if "Pcomtotal" in var["functions"]:
+    #     Pcomtotal = var["functions"]["Pcomtotal"]
+    #     ax.plot(Pcomtotal[0, :], Pcomtotal[1, :], Pcomtotal[2, :],
+    #             color=[0.2, 0.7, 0.05], linewidth=2, label="Total COM")
 
     # -----------------------------
     # Plot snapshots of the robot
@@ -105,7 +108,7 @@ def snapshot_from_vars(var, ii, ax=None, marker_size=6, line_width=2):
     # -----------------------------
     # Plot COM markers
     # -----------------------------
-    ax.scatter(Pcomx, Pcomy, Pcomz, color='c', s=50, label='Link COMs')
+    ax.scatter(Pcomx, Pcomy, Pcomz, color='c', s=50)
 
     if has_Pcomtotal:
         ax.scatter(Pcomtotalx, Pcomtotaly, Pcomtotalz, color=[0.2, 0.7, 0.05],

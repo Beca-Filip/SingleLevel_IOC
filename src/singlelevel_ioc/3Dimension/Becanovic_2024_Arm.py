@@ -26,7 +26,6 @@ class Arm4dof:
         
         print(self.n)
         for i in np.arange(0,self.n):
-            print(i)
             L = RevoluteMDH(a=self.L[i], m=self.M[i], alpha=self.alpha[i], r=self.COM[:,i], inertia=self.I[i], modified=True, offset=self.offset[i])
             list_links.append(L)
         #To show last segment
@@ -50,7 +49,6 @@ class Arm4dof:
         else:
             raise ValueError("Lengths of self.L and self.alpha must be either n or n-1")
 
-        print(dh)
         # last column remains zeros
         return dh
     
