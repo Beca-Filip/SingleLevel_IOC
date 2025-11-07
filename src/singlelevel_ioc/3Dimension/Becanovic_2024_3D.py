@@ -32,7 +32,6 @@ goal = np.array([[0.5], [0.5], [0]])
 
 A = Arm(L, M, I, COM, alpha, offset, n)
 arm = A.create_DH_model()
-
 dh_param = A.get_dh_params()
 
 
@@ -277,9 +276,9 @@ plt.title("Joint Trajectories")
 # -----------------------------
 # Segment velocities
 # -----------------------------
-# plt.figure(figsize=(12, 8))
-# plot_segment_vels_from_vars(num_vars_1)
-# plot_segment_vels_from_vars(num_vars_ioc)
-# plt.title("Segment Velocities")
+plt.figure(figsize=(12, 8))
+plot_segment_vels_from_vars(num_vars_1, label='num_vars_1')
+# plot_segment_vels_from_vars(num_vars_ioc, label='num_vars_ioc')
+plt.title("Segment Velocities")
 
 plt.show()

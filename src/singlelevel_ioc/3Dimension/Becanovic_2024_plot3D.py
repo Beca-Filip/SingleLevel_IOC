@@ -215,40 +215,42 @@ def plot_segment_vels_from_vars(vars, *args, **kwargs):
     t = np.linspace(0, (N-1)*dt, N)
 
     for ii in range(n):
+        print(ii)
         # Compute numerical velocities
         P_next = vars["functions"]["P"][ii+1]
+        print(P_next)
         Vnum = np.diff(P_next, axis=1) / dt
         NnumV = Vnum.shape[1]
 
         # ----------------------
         # x-velocity
         # ----------------------
-        # plt.subplot(3, n, ii+1)
-        # plt.plot(t, vars["functions"]["V"][ii+1][0, :], *args, **kwargs)
-        # plt.plot(t[:NnumV], Vnum[0, :], '--', *args, **kwargs)
-        # plt.ylabel(f"$V^{{{ii+1}}}_x$")
-        # plt.legend()
-        # plt.grid(True)
+        plt.subplot(3, n, ii+1)
+        plt.plot(t, vars["functions"]["V"][ii+1][0, :], *args, **kwargs)
+        plt.plot(t[:NnumV], Vnum[0, :], '--', label = 'numerically computed')
+        plt.ylabel(f"$V^{{{ii+1}}}_x$")
+        plt.legend()
+        plt.grid(True)
 
-        # # ----------------------
-        # # y-velocity
-        # # ----------------------
-        # plt.subplot(3, n, n + ii+1)
-        # plt.plot(t, vars["functions"]["V"][ii+1][1, :], *args, **kwargs)
-        # plt.plot(t[:NnumV], Vnum[1, :], '--', *args, **kwargs)
-        # plt.ylabel(f"$V^{{{ii+1}}}_y$")
-        # plt.legend()
-        # plt.grid(True)
+        # ----------------------
+        # y-velocity
+        # ----------------------
+        plt.subplot(3, n, n + ii+1)
+        plt.plot(t, vars["functions"]["V"][ii+1][1, :], *args, **kwargs)
+        plt.plot(t[:NnumV], Vnum[1, :], '--', label = 'numerically computed')
+        plt.ylabel(f"$V^{{{ii+1}}}_y$")
+        plt.legend()
+        plt.grid(True)
 
         # ----------------------
         # theta-velocity
         # ----------------------
-        # plt.subplot(3, n, 2*n + ii+1)
-        # plt.plot(t, vars["functions"]["V"][ii+1][2, :], *args, **kwargs)
-        # plt.plot(t[:NnumV], Vnum[2, :], '--', *args, **kwargs)
-        # plt.ylabel(f"$V^{{{ii+1}}}_\\theta$")
-        # plt.legend()
-        # plt.grid(True)
+        plt.subplot(3, n, 2*n + ii+1)
+        plt.plot(t, vars["functions"]["V"][ii+1][2, :], *args, **kwargs)
+        plt.plot(t[:NnumV], Vnum[2, :], '--', label = 'numerically computed')
+        plt.ylabel(f"$V^{{{ii+1}}}_\\theta$")
+        plt.legend()
+        plt.grid(True)
 
         # xlabel for bottom row
         plt.xlabel("$t$ [s]")

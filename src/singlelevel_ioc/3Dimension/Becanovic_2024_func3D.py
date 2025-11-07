@@ -189,6 +189,7 @@ def forward_propagation(q, dq, ddq, dh_params, M, COM, I, gravity):
     for t in range(N):
         R_prev = ca.MX.eye(3)
         p_prev = ca.MX.zeros(3)
+        v_prev = ca.MX.zeros(3)
         a_prev = ca.MX.zeros(3)
         a_prev = gravity
         omega_prev = ca.MX.zeros(3)
@@ -225,9 +226,8 @@ def forward_propagation(q, dq, ddq, dh_params, M, COM, I, gravity):
             p_com_i = p_prev + R_i @ COM[:, i]
 
             # --- Linear velocity of joint i  and com i ---
-            v_i = R_local.T @ (V[i][:, t-1] if t > 0 else ca.MX.zeros(3)) \
-                  + ca.cross(omega_i, p_local)
-            v_com_i = v_i + ca.cross(omega_i, R_i @ COM[:, i])
+            v_i = v_prev + ca.cross(omega_i, R_prev @ p_local)
+            v_com_i = v_i + ca.cross(omega_i, R_i@ COM[:, i])
 
             # Store results
             P[i+1][:, t] = p_i
@@ -239,6 +239,7 @@ def forward_propagation(q, dq, ddq, dh_params, M, COM, I, gravity):
             R_prev = R_i
             p_prev = p_i
             a_prev = a_i
+            v_prev = v_i
             omega_prev = omega_i
             domega_i_prev = domega_i
 
