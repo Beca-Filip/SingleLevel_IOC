@@ -120,6 +120,7 @@ vars_ioc["variables"]["theta"] = opti_ioc.variable(nparam)
 
 # Prepare stationarity constraint
 vars_ioc["costs"]["compound_cost"] = vars_ioc["variables"]["theta"][0] * vars_ioc["costs"]["joint_vel_cost"] + vars_ioc["variables"]["theta"][1] * vars_ioc["costs"]["joint_torque_cost"] + vars_ioc["variables"]["theta"][2] * vars_ioc["costs"]["ee_vel_cost"]
+
 q_vec = ca.vec(vars_ioc["variables"]["q"])
 dq_vec = ca.vec(vars_ioc["variables"]["dq"])
 ddq_vec = ca.vec(vars_ioc["variables"]["ddq"])
@@ -225,31 +226,6 @@ theta_id = np.array(num_vars_ioc["variables"]["theta"]).flatten()
 print_str = "True theta = [" + ", ".join(["%.4f" % t for t in theta_true]) + "]"
 print_str += "\nId.  theta = [" + ", ".join(["%.4f" % t for t in theta_id]) + "].\n"
 print(print_str)
-
-# qtemp = num_vars_ioc["variables"]["q"][:, -1]
-# q0 = num_vars_ioc["variables"]["q"][:, 0]
-# print(num_vars_ioc["variables"]["q"])
-# print(qtemp)
-# arm.plot(np.array([q0[0], q0[1], 0]), block=True)
-
-# arm.plot(np.array([qtemp[0], qtemp[1], 0]), block=True)
-
-# -----------------------------
-# Snapshots plots
-# -----------------------------
-# fig = plt.figure(figsize=(12, 8))
-# ax = plt.axes(projection='3d')
-# ax.set_xlabel('X')
-# ax.set_ylabel('Y')
-# ax.set_zlabel('Z')
-# ax.set_aspect('equal')
-# ax.view_init(elev=30, azim=-60)
-# plot_snapshots_from_vars(fig, num_vars_1, 5)
-# # plot 3D goal point on the 3D axes
-# ax.scatter(float(goal[0]), float(goal[1]), float(goal[2]), c='r', s=200, marker='o', depthshade=True, label='Goal')
-# plt.legend()
-# plt.axis('equal')
-# plt.title("Snapshots: num_vars_1")
 
 fig = plt.figure(figsize=(12, 8))
 ax = plt.axes(projection='3d')

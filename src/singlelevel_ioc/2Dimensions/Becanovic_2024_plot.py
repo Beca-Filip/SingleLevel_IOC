@@ -175,9 +175,12 @@ def snapshot_from_vars(num_vars, ii, marker_size=15, line_width=2):
     # -----------------------------
     # COM positions
     # -----------------------------
-    Pcom = np.hstack(num_vars["functions"]["Pcom"])
+    Pcom = np.vstack([np.array(Pci) for Pci in num_vars["functions"]["Pcom"]])  # shape (3*n, N)
+
     Pcomx = Pcom[0::3, ii]
     Pcomy = Pcom[1::3, ii]
+    print(ii)
+    print('Pcomx : ', Pcomx)
 
     # Optional total COM
     has_Pcomtotal = "Pcomtotal" in num_vars["functions"]

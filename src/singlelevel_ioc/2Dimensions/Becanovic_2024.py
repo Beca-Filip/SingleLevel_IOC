@@ -57,19 +57,6 @@ num_vars_1 = numerize_var(var, sol_1)
 
 print(q_1)
 
-# theta_2 = np.array([200, 150, 30])  # weights for cost function 2
-# theta_2 = theta_2 / np.linalg.norm(theta_2)
-# opti.minimize(theta_2[0] * num_vars_1["costs"]["joint_vel_cost"] + theta_2[1] * num_vars_1["costs"]["joint_torque_cost"] + theta_2[2] * num_vars_1["costs"]["ee_vel_cost"])
-# sol_2 = opti.solve()
-# lambda_2 = sol_2.value(opti.lam_g) #  Extract dual variables
-# # Extract primal variables
-# q_2 = sol_2.value(var['variables']['q'])
-# dq_2 = sol_2.value(var['variables']['dq'])
-# ddq_2 = sol_2.value(var['variables']['ddq'])
-
-# # Numerize
-# num_vars_2 = numerize_var(var, sol_2)
-
 ## Make IOC
 [opti_ioc, vars_ioc] = make_ndof_model(n, N);
 

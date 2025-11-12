@@ -33,10 +33,10 @@ def plot_snapshots_from_vars(fig, var, nsnapshots=10):
     # -----------------------------
     # Total COM trajectory (if exists)
     # -----------------------------
-    # if "Pcomtotal" in var["functions"]:
-    #     Pcomtotal = var["functions"]["Pcomtotal"]
-    #     ax.plot(Pcomtotal[0, :], Pcomtotal[1, :], Pcomtotal[2, :],
-    #             color=[0.2, 0.7, 0.05], linewidth=2, label="Total COM")
+    if "Pcomtotal" in var["functions"]:
+        Pcomtotal = var["functions"]["Pcomtotal"]
+        ax.plot(Pcomtotal[0, :], Pcomtotal[1, :], Pcomtotal[2, :],
+                color=[0.2, 0.7, 0.05], linewidth=2, label="Total COM")
 
     # -----------------------------
     # Plot snapshots of the robot
@@ -83,17 +83,18 @@ def snapshot_from_vars(var, ii, ax=None, marker_size=6, line_width=2):
     # -----------------------------
     # COM positions
     # -----------------------------
-    Pcom = np.hstack(var["functions"]["Pcom"])
+    Pcom = np.vstack([np.array(Pci) for Pci in var["functions"]["Pcom"]])  # shape (3*n, N)
+
     Pcomx = Pcom[0::3, ii]
     Pcomy = Pcom[1::3, ii]
     Pcomz = Pcom[2::3, ii]
 
     # Optional total COM
-    # has_Pcomtotal = "Pcomtotal" in var["functions"]
-    # if has_Pcomtotal:
-    #     Pcomtotalx = var["functions"]["Pcomtotal"][0, ii]
-    #     Pcomtotaly = var["functions"]["Pcomtotal"][1, ii]
-    #     Pcomtotalz = var["functions"]["Pcomtotal"][2, ii]
+    has_Pcomtotal = "Pcomtotal" in var["functions"]
+    if has_Pcomtotal:
+        Pcomtotalx = var["functions"]["Pcomtotal"][0, ii]
+        Pcomtotaly = var["functions"]["Pcomtotal"][1, ii]
+        Pcomtotalz = var["functions"]["Pcomtotal"][2, ii]
 
     # -----------------------------
     # Plot robot skeleton
@@ -107,11 +108,11 @@ def snapshot_from_vars(var, ii, ax=None, marker_size=6, line_width=2):
     # -----------------------------
     # Plot COM markers
     # -----------------------------
-    ax.scatter(Pcomx, Pcomy, Pcomz, color='c', s=50)
+    ax.scatter(Pcomx, Pcomy, Pcomz, color='c', s=50, alpha=1)
 
-    # if has_Pcomtotal:
-    #     ax.scatter(Pcomtotalx, Pcomtotaly, Pcomtotalz, color=[0.2, 0.7, 0.05],
-    #                marker='s', s=70, label='Total COM')
+    if has_Pcomtotal:
+        ax.scatter(Pcomtotalx, Pcomtotaly, Pcomtotalz, color=[0.2, 0.7, 0.05],
+                   marker='s', s=70, label='Total COM')
 
     return np.column_stack((Px, Py, Pz)), None, None, np.column_stack((Pcomx, Pcomy, Pcomz))
 
@@ -214,13 +215,9 @@ def plot_segment_vels_from_vars(vars, *args, **kwargs):
     dt = vars["parameters"]["dt"]
     t = np.linspace(0, (N-1)*dt, N)
 
-    print("full V : ", vars["functions"]["V"])
-
     for ii in range(n):
-        print(ii)
         # Compute numerical velocities
         P_next = vars["functions"]["P"][ii+1]
-        print("V : ", vars["functions"]["V"][ii+1])
         Vnum = np.diff(P_next, axis=1) / dt
         NnumV = Vnum.shape[1]
 
