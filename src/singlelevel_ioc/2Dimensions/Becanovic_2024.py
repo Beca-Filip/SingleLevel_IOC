@@ -190,12 +190,6 @@ plt.plot(goal[0], goal[1], 'ro', markerfacecolor='auto', markersize=20)
 plt.axis('equal')
 plt.title("Snapshots: num_vars_1")
 
-# plt.figure(figsize=(12, 8))
-# plot_snapshots_from_vars(num_vars_2, 10)
-# plt.plot(goal[0], goal[1], 'ro', markerfacecolor='auto', markersize=20)
-# plt.axis('equal')
-# plt.title("Snapshots: num_vars_2")
-
 plt.figure(figsize=(12, 8))
 plot_snapshots_from_vars(num_vars_ioc, 10)
 plt.plot(goal[0], goal[1], 'ro', markerfacecolor='auto', markersize=20)
@@ -207,7 +201,6 @@ plt.title("Snapshots: num_vars_ioc")
 # -----------------------------
 plt.figure(figsize=(12, 8))
 plot_joint_traj_from_vars(num_vars_1)
-# plot_joint_traj_from_vars(num_vars_2)
 plot_joint_traj_from_vars(num_vars_ioc)
 plt.title("Joint Trajectories")
 

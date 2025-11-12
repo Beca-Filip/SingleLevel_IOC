@@ -27,23 +27,11 @@ offset=np.zeros(n)
 
 gravity = np.array([0, -9.81, 0])  # gravity vector
 Fext = [np.zeros((3, N - 2)) for _ in range(n)]
-
-goal = np.array([[0.5], [0.5], [0]])
+goal = np.array([0.5, 0.5, 0.0]).reshape(3, 1)  # goal position for the end-effector
 
 A = Arm(L, M, I, COM, alpha, offset, n)
 arm = A.create_DH_model()
 dh_param = A.get_dh_params()
-
-
-goal = arm.fkine(np.array([1.99, -2.41, 0]))
-
-# extract last column (position) from homogeneous transform returned by fkine
-gmat = goal.A if hasattr(goal, "A") else np.array(goal)
-goal = gmat[:3, 3].reshape(3, 1)
-print(goal)
-
-#arm.plot(np.array([0,0,0]), block=True)
-# arm.plot(np.array([np.pi/2,np.pi/4, 0]), block=True)
 
 
 # Initial guess

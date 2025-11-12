@@ -74,6 +74,8 @@ def make_ndof_model(n, N, dh_params):
 
 
     functions['F'], functions['N'], functions['model_tau'] = backward_propagation(
+        functions['P'],
+        functions['Pcom'],
         functions['Fcom'],
         functions['Ncom'],
         functions['Fext'],
@@ -249,7 +251,7 @@ def forward_propagation(q, dq, ddq, dh_params, M, COM, I, gravity):
     return Pcom, P, Vcom, V, Acom, A, Fcom, Ncom
 
 
-def backward_propagation(Fcom, Ncom, Fext, M, gravity, q, dh_params):
+def backward_propagation(P, Pcom, Fcom, Ncom, Fext, M, gravity, q, dh_params):
     """
     3D version of backward_propagation using CasADi MX.
 
