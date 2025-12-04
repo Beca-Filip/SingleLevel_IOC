@@ -62,6 +62,7 @@ print(q_1)
 
 # Extract dual variables size
 ndual = len(lambda_1)
+print("Ndual : ", ndual)
 # Extract parameters size
 nparam = len(theta_1)
 
@@ -100,6 +101,8 @@ vars_ioc["constraints"]["compound_constraints"] = compound_constraints
 # Compute gradient of compound constraints w.r.t all variables (use the original all_vars)
 vars_ioc["constraints"]["grad_compound_constraints"] = ca.jacobian(compound_constraints, all_vars)
 
+print('Gradient of compound constraints shape: ', vars_ioc["constraints"]["grad_compound_constraints"].shape)
+print(' Lambda shape: ', vars_ioc["variables"]["lambda"].shape)
 vars_ioc["constraints"]["stationarity"] = vars_ioc["costs"]["grad_compound_cost"] + vars_ioc["constraints"]["grad_compound_constraints"].T @ vars_ioc["variables"]["lambda"]
 
 

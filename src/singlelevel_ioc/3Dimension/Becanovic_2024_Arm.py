@@ -1,5 +1,4 @@
 import numpy as np
-from qpsolvers import solve_qp
 import scipy.sparse as sp
 import matplotlib.pyplot as plt
 from roboticstoolbox import DHRobot, RevoluteMDH, PrismaticDH

@@ -160,6 +160,10 @@ opti_ioc.subject_to(-q_diff <= np.pi / 2)
 # -----------------------------
 # MATLAB: vars_ioc.costs.L2_loss = sum(sum((vars_ioc.variables.q - q_1).^2));
 q_diff = vars_ioc["variables"]["q"] - q_1
+print(vars_ioc["variables"]["q"].shape)
+print(q_1.shape)
+print(q_1)
+stop()
 vars_ioc["costs"]["L2_loss"] = ca.sumsqr(q_diff)  # sumsqr does exactly sum(sum(...^2))
 
 # -----------------------------
