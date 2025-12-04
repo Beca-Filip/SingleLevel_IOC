@@ -29,7 +29,7 @@ The code performs the following tasks:
 
 To use it, simply run from the command line :
 ```bash
-./run_with_gepetto my_python_file.py
+./run_with_gepetto main.py
 ```
     
 
@@ -51,3 +51,14 @@ This will install all necessary libraries, including:
 **Gepetto Viewer**: For visualizing the robot motion and trajectory.
 
 All dependancies can be found in the _pyproject.toml_ file in the root directory.
+
+## Results
+
+This simulation includes in the cost function both energy and safety (for maintainig balance). Thus, the focus is made on the Center Of Mass of the model. 
+In a first place, Direct Optimal Control is performed such as joints angles trajectories are computed in order to achieve COM displacement to it's goal. Then, these exemple trajectories are used to feed the IOC algorithm to recover the weight of energy and safety features. 
+
+
+![Direct Optimal Control Trajectories](img/DOC_res.png)
+
+![Double Pendulum Simulation](img/double_pendulum_res.png)
+In green is the goal position of the center of mass
