@@ -1,11 +1,42 @@
 import casadi as cs
-from pinocchio import casadi as cpin
-from sympy import var
-import pinocchio as pin
+import pandas as pd
 import numpy as np
+from pinocchio import casadi as cpin
 
+def make_tau_fun(cmodel):
+    q  = cs.SX.sym("q",  cmodel.nq)
+    dq = cs.SX.sym("dq", cmodel.nv)
+    ddq = cs.SX.sym("ddq", cmodel.nv)
 
-def make_pinocchio_model(cmodel, rnea_fun, com_fun, N, model, data):
+    cdata = cmodel.createData()
+    # forward kinematics & dynamics
+    cpin.forwardKinematics(cmodel, cdata, q, dq, ddq)
+    cpin.crba(cmodel, cdata, q)          # mass matrix M
+    cpin.nonLinearEffects(cmodel, cdata, q, dq)  # b(q,dq) = C*qdot + g
+
+    # rnea gives tau directly
+    tau = cpin.rnea(cmodel, cdata, q, dq, ddq)
+
+    return cs.Function("tau_fun", [q, dq, ddq], [tau])
+
+def make_com_fun(cmodel):
+    q  = cs.SX.sym("q",  cmodel.nq)
+    dq = cs.SX.sym("dq", cmodel.nv)
+    ddq = cs.SX.sym("ddq", cmodel.nv)
+
+    cdata = cmodel.createData()
+    com = cpin.centerOfMass(cmodel, cdata, q)  # 3×1 SX
+    vcom = cdata.vcom[0]  # 3×1 SX
+    acom = cdata.acom[0]  # 3×1 SX
+    
+    return cs.Function("com_fun", [q, dq, ddq], [com, vcom, acom])
+
+def make_pinocchio_model(cmodel, tau_fun, com_fun, safety_fun, N, w ):
+    """
+    N: number of time steps
+    model: Pinocchio model (with free-flyer)
+    tau_fun, com_fun: CasADi Functions built above
+    """
     opti = cs.Opti()
     var = {}
 
@@ -15,6 +46,8 @@ def make_pinocchio_model(cmodel, rnea_fun, com_fun, N, model, data):
     params['dq0']  = opti.parameter(cmodel.nv)
     params['goal_COM'] = opti.parameter(3)   # or 2 if planar COM
     params['COM_init'] = opti.parameter(3)
+    params['T'] = opti.parameter(1)
+    dt = params['T'] / (N-1)
 
     # (Optional) other parameters like safety obstacles etc.
     var['parameters'] = params
@@ -38,20 +71,24 @@ def make_pinocchio_model(cmodel, rnea_fun, com_fun, N, model, data):
     # Compute tau for each k
     tau_list   = []
     com_list   = []
+    safety_list  = []
 
     for k in range(N):
         qk   = q_full[:, k]
         dqk  = dq_full[:, k]
         ddqk = ddq_full[:, k]
 
-        tau_k  = rnea_fun(qk, dqk, ddqk)   # (n,)
+        tau_k  = tau_fun(qk, dqk, ddqk)   # (n,)
         com_k  = com_fun(qk)    # (3,)
+        d_k   = safety_fun(qk, dqk, ddqk)
 
         tau_list.append(tau_k)
         com_list.append(com_k)
+        safety_list.append(d_k)
 
     functions['model_tau'] = cs.horzcat(*tau_list)      # (n, N)
     functions['COM']       = cs.horzcat(*com_list)      # (3, N)
+    functions['safety']   = cs.horzcat(*safety_list)
 
     var['functions'] = functions
 
@@ -72,17 +109,25 @@ def make_pinocchio_model(cmodel, rnea_fun, com_fun, N, model, data):
     # COM constraints
     com = functions['COM']  # (3,N)
     constraints['com_final']= com[:, -1]  - params['goal_COM']  # or COM_goal param
+    
+    # ---- Joint q3 (right hip flexion) bounds ----
+    # q3_min = -0.8   # rad (example: extension)
+    # q3_max =  0.8   # rad (example: flexion)
 
+    # q3 = variables['q'][2, :]   # q3 over time
 
+    # opti.subject_to(opti.bounded(q3_min, q3, q3_max))
+   
     # Add to Opti
     opti.subject_to(constraints['initial_pos'] == 0)
     opti.subject_to(constraints['initial_vel'] == 0)
     opti.subject_to(constraints['dynamics_pos'] == 0)
     opti.subject_to(constraints['dynamics_vel'] == 0)
     opti.subject_to(constraints['com_final']  == 0)
-    
-    opti.subject_to(opti.bounded(-5, variables['dq'], 5))
-    opti.subject_to(opti.bounded(-5, functions['model_tau'], 5))
+
+    # opti.subject_to(opti.bounded(-100, variables['dq'], 100))
+    # opti.subject_to(opti.bounded(-100, functions['model_tau'], 100))
+    opti.subject_to(opti.bounded(-2, variables['q'], 2))
 
     var['constraints'] = constraints
 
@@ -90,23 +135,18 @@ def make_pinocchio_model(cmodel, rnea_fun, com_fun, N, model, data):
     tau = functions['model_tau']
 
     # Energy cost
-    costs['energy_cost'] = cs.sumsqr(tau) * (params['dt'] / ( (N-1) ))  # scale as you like
+    tau_max =  10 # extracted from data with rnea
+    scaling_factor_tau = tau_max**2
+    costs['energy_cost'] = cs.sumsqr(tau) / N / scaling_factor_tau # scale as you like
 
-    # Safety cost: sum over time of (1/d)^2
-    safety_terms = []
-    for k in range(N-1):
-        com_k = functions['COM'][:, k]
-        d_k = safety_distance(com_k, model, data)
-        safety_terms.append( 1.0 / (d_k**2 + 1e-6) )  # small epsilon
-
-    safety_terms = cs.vertcat(*safety_terms)
+    safety_terms = 1/functions['safety']
     costs['safety_cost'] = cs.sumsqr(safety_terms) * (params['dt'] / ( (N-1) ))
 
     var['costs'] = costs
 
     # Total cost (weights w_safety, w_energy as parameters or constants)
-    w_safety = 0.1
-    w_energy = 0.9
+    w_safety = w[0]
+    w_energy = w[1]
     w_total = w_safety + w_energy
     w_safety = w_safety / w_total
     w_energy = w_energy / w_total
@@ -116,21 +156,57 @@ def make_pinocchio_model(cmodel, rnea_fun, com_fun, N, model, data):
     return opti, var
 
 
-def safety_distance(com_fun, model, data):
+def safety_distance(df, k,
+                    left_toe_cols=("Left_foot3.0", "Left_foot3.1", "Left_foot3.2"),
+                    right_toe_cols=("Right_foot3.0", "Right_foot3.1", "Right_foot3.2"),
+                    com_cols=("com.0", "com.1", "com.2"),
+                    forward_axis=1):
     """
-    User-defined function that returns a positive scalar distance 
-    to boundaries given joint state (qk, dqk).
-    For safety, COM should stay within some limits (e.g., x in [-X_boundary, X_boundary])
+    Compute the forward safety distance for a single dataframe row (index k).
+
+    safety(k) = forward_BoS_boundary(k) - COM_forward(k)
+
+    forward_BoS_boundary(k) = max( left_toe_forward(k), right_toe_forward(k) )
     """
-    # for double pendulum, only considere y direction 
-    q_max_com = np.array([np.pi/2, 0.0])  # initial joint angles
-    pin.forwardKinematics(model, data, q_max_com)
-    pin.updateFramePlacements(model, data)
-    com_max_pos = pin.centerOfMass(model, data, q_max_com, np.zeros(model.nv))
-    print(com_fun)
-    Y_boundary = 0.9*com_max_pos[1]  # get bos limit
-    print("Y_boundary:", Y_boundary)
-    return abs(Y_boundary) - com_fun[1] 
+
+    # Extract forward coordinate for left and right toes
+    left_fwd = df.loc[k, left_toe_cols[forward_axis]]
+    right_fwd = df.loc[k, right_toe_cols[forward_axis]]
+    
+    # Forward boundary of BoS
+    bos_forward = max(left_fwd, right_fwd)
+
+    # COM forward coordinate
+    com_fwd = df.loc[k, com_cols[forward_axis]]
+
+    # Safety = boundary - COM
+    return bos_forward - com_fwd
+
+def make_safety_fun(cmodel, toe_id):
+    print(toe_id)
+    q  = cs.SX.sym("q",  cmodel.nq)
+    dq = cs.SX.sym("dq", cmodel.nv)
+    ddq = cs.SX.sym("ddq", cmodel.nv)
+
+    cdata = cmodel.createData()
+
+    # Forward kinematics
+    cpin.forwardKinematics(cmodel, cdata, q, dq, ddq)
+    cpin.updateFramePlacements(cmodel, cdata)
+
+    # COM
+    com = cpin.centerOfMass(cmodel, cdata, q)
+
+    # Toe frames
+    toe = cdata.oMf[toe_id].translation
+
+    # Forward axis = Y
+    toe_forward  = toe[1]
+    safety_dist  = toe_forward - com[1]     # positive = stable
+
+    return cs.Function("safety_fun", [q, dq, ddq], [safety_dist])
+
+
 
 def instantiate_pinocchio_model(var, opti, dt, q0, dq0, goal_COM, q_guess, dq_guess, ddq_guess):
     p = var['parameters']
@@ -143,3 +219,4 @@ def instantiate_pinocchio_model(var, opti, dt, q0, dq0, goal_COM, q_guess, dq_gu
     opti.set_initial(v['q'],   q_guess)
     opti.set_initial(v['dq'],  dq_guess)
     opti.set_initial(v['ddq'], ddq_guess)
+

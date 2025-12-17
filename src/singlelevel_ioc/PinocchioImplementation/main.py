@@ -67,15 +67,17 @@ com = cpin.centerOfMass(cmodel, cdata, q)  # shape (3,)
 rnea_fun = ca.Function("rnea", [q, dq, ddq], [tau])
 com_fun  = ca.Function("com",  [q], [com])
 
+base_id = model.getFrameId("base_link")
+safety_fun = csf.make_safety_fun(cmodel, base_id)
 N = 120
 T = 1
 dt = T / N
 
 
-q0_meas = np.array([np.pi/2, 0.0])  # initial joint angles
+q0_meas = np.array([0.3683929,  0.52020666])  # initial joint angles
 dq0_meas = np.zeros(nv)
 
-q_goal = np.array([0.0, 1.57])
+q_goal = np.array([-0.43403035, -0.14875698])
 
 # Set the model and data to the current configuration and velocity
 pin.forwardKinematics(model, data, q_goal)
@@ -88,8 +90,8 @@ q_init = np.array((np.linspace(1.5708, 2.0399, N), np.linspace(0, -2.2524, N))) 
 dq_init = np.diff(q_init, axis=1) / dt
 ddq_init = np.diff(dq_init, axis=1) / dt 
 
-
-opti, var = csf.make_pinocchio_model(cmodel, rnea_fun, com_fun, N, model, data)
+w = [0, 1]  # weights for safety and energy costs
+opti, var = csf.make_pinocchio_model(cmodel, rnea_fun, com_fun, safety_fun, N, w )
 
 csf.instantiate_pinocchio_model(
     var=var,
@@ -158,8 +160,9 @@ pf.play_in_gepetto(
 )
 
 #### IOC Computation, ######
+w = [0, 1]  # weights for safety and energy costs
 
-[opti_ioc, vars_ioc] = csf.make_pinocchio_model(cmodel, rnea_fun, com_fun, N, model, data)
+[opti_ioc, vars_ioc] = csf.make_pinocchio_model(cmodel, rnea_fun, com_fun, safety_fun, N, w )
 
 nparam = 2 
 
@@ -317,3 +320,30 @@ pf.play_in_gepetto(
     dt=viewer_dt
 )
 
+
+q_sol_ioc = np.array(q_sol)
+q_sol_ioc = ensure_shape(q_sol_ioc, nq)
+dq_sol_ioc = np.diff(q_sol_ioc, axis=1) / dt
+ddq_sol_ioc = np.diff(dq_sol_ioc, axis=1) / dt
+
+# Compute tau_sol_ioc using RNEA
+tau_sol_ioc = np.zeros((nv, q_sol_ioc.shape[1]))
+for i in range(q_sol_ioc.shape[1]):
+    q_i = q_sol_ioc[:, i]
+    dq_i = dq_sol_ioc[:, i] if i < dq_sol_ioc.shape[1] else dq_sol_ioc[:, -1]
+    ddq_i = ddq_sol_ioc[:, i] if i < ddq_sol_ioc.shape[1] else ddq_sol_ioc[:, -1]
+    tau_sol_ioc[:, i] = np.array(rnea_fun(q_i, dq_i, ddq_i)).flatten()
+
+tau_arr = tau_sol_ioc
+
+# Compute com_arr for q_sol_ioc
+com_arr = np.zeros((3, q_sol_ioc.shape[1]))
+for i in range(q_sol_ioc.shape[1]):
+    q_i = q_sol_ioc[:, i]
+    dq_i = dq_sol_ioc[:, i] if i < dq_sol_ioc.shape[1] else dq_sol_ioc[:, -1]
+    pin.forwardKinematics(model, data, q_i, dq_i)
+    pin.updateFramePlacements(model, data)
+    com_i = pin.centerOfMass(model, data, q_i, dq_i)
+    com_arr[:, i] = com_i
+
+pf.plot_results(t, q_sol_ioc, dq_sol_ioc, ddq_sol_ioc, tau_arr, com_arr, com_goal)
