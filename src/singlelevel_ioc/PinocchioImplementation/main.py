@@ -33,7 +33,8 @@ def ensure_shape(arr, n_dof):
 # ---------------------------------------------------------------------------
 root = "world"
 
-urdf_path = "double_pendulum_simple.urdf"
+# urdf_path = "double_pendulum_simple.urdf"
+urdf_path = "./src/singlelevel_ioc/PinocchioImplementation/double_pendulum_simple.urdf"
 # 1) Pinocchio model
 model = pin.buildModelFromUrdf(urdf_path)
 
@@ -112,27 +113,34 @@ q_sol   = sol.value(var['variables']['q'])
 dq_sol  = sol.value(var['variables']['dq'])
 ddq_sol = sol.value(var['variables']['ddq'])
 tau_sol = sol.value(var['functions']['model_tau'])
+com_sol = sol.value(var['functions']['COM'])
 
 # Prepare arrays
 q_arr = np.array(q_sol)
 dq_arr = np.array(dq_sol)
 ddq_arr = np.array(ddq_sol)
 tau_arr = np.array(tau_sol)
+com_arr = np.array(com_sol)
 
 q_arr   = ensure_shape(q_arr, nq)
 dq_arr  = ensure_shape(dq_arr, nq)
 ddq_arr = ensure_shape(ddq_arr, nq)
 tau_arr = ensure_shape(tau_arr, nv)
+com_arr = ensure_shape(com_arr, 3)
 
-# Set the model and data to the current configuration and velocity
-com_arr = np.zeros((3, q_arr.shape[1]))
-for i in range(0, q_arr.shape[1]-1):
-    q_i = q_arr[:, i]
-    dq_i = dq_arr[:, i]
-    pin.forwardKinematics(model, data, q_i, dq_i)
-    pin.updateFramePlacements(model, data)
-    com_i = pin.centerOfMass(model, data, q_i, dq_i)
-    com_arr[:, i] = com_i
+nvar = csf.numerize_var(var, sol)
+if not np.allclose(q_arr, nvar['variables']['q']):
+    ValueError('Incoherent q from numerize_var.')
+
+# # Set the model and data to the current configuration and velocity
+# com_arr = np.zeros((3, q_arr.shape[1]))
+# for i in range(0, q_arr.shape[1]-1):
+#     q_i = q_arr[:, i]
+#     dq_i = dq_arr[:, i]
+#     pin.forwardKinematics(model, data, q_i, dq_i)
+#     pin.updateFramePlacements(model, data)
+#     com_i = pin.centerOfMass(model, data, q_i, dq_i)
+#     com_arr[:, i] = com_i
 
 # Time vector (use solver timestep if available)
 T_len = q_arr.shape[1]
