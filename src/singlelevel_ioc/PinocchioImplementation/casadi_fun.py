@@ -45,9 +45,6 @@ def make_pinocchio_model(cmodel, tau_fun, com_fun, safety_fun, N, w ):
     params['q0']   = opti.parameter(cmodel.nq)
     params['dq0']  = opti.parameter(cmodel.nv)
     params['goal_COM'] = opti.parameter(3)   # or 2 if planar COM
-    params['COM_init'] = opti.parameter(3)
-    params['T'] = opti.parameter(1)
-    dt = params['T'] / (N-1)
 
     # (Optional) other parameters like safety obstacles etc.
     var['parameters'] = params
@@ -220,3 +217,52 @@ def instantiate_pinocchio_model(var, opti, dt, q0, dq0, goal_COM, q_guess, dq_gu
     opti.set_initial(v['dq'],  dq_guess)
     opti.set_initial(v['ddq'], ddq_guess)
 
+
+
+def numerize_var(model_var, opti, initial_flag=False):
+    """
+    Evaluate all symbolic CasADi variables/parameters/functions in a model
+    into numeric CasADi DM arrays, either at the current solution or at
+    the initial guess.
+
+    Args:
+        model_var (dict): The structure returned by make_ndof_model().
+        opti (casadi.Opti): The CasADi Opti instance.
+        initial_flag (bool, optional): 
+            If True, evaluate using opti.initial(). 
+            Otherwise, use the optimized values. Default: False.
+
+    Returns:
+        dict: A dictionary 'num_var' with the same structure as model_var,
+              but all CasADi symbols replaced by numeric DM values.
+    """
+
+    num_var = {}
+
+    # Loop over main categories: 'variables', 'parameters', 'functions'
+    for category_name, category_content in model_var.items():
+        num_var[category_name] = {}
+
+        # Loop over computables within each category
+        for computable_name, computable_value in category_content.items():
+            # Case 1: list (cell array in MATLAB)
+            if isinstance(computable_value, (list, tuple)):
+                num_var[category_name][computable_name] = []
+                for item in computable_value:
+                    if not initial_flag:
+                        num_var[category_name][computable_name].append(opti.value(item))
+                    else:
+                        num_var[category_name][computable_name].append(
+                            opti.value(item, opti.initial())
+                        )
+
+            # Case 2: direct symbolic expression (MX/DM)
+            else:
+                if not initial_flag:
+                    num_var[category_name][computable_name] = opti.value(computable_value)
+                else:
+                    num_var[category_name][computable_name] = opti.value(
+                        computable_value, opti.initial()
+                    )
+
+    return num_var
