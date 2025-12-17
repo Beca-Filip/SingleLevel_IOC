@@ -9,10 +9,6 @@ def make_tau_fun(cmodel):
     ddq = cs.SX.sym("ddq", cmodel.nv)
 
     cdata = cmodel.createData()
-    # forward kinematics & dynamics
-    cpin.forwardKinematics(cmodel, cdata, q, dq, ddq)
-    cpin.crba(cmodel, cdata, q)          # mass matrix M
-    cpin.nonLinearEffects(cmodel, cdata, q, dq)  # b(q,dq) = C*qdot + g
 
     # rnea gives tau directly
     tau = cpin.rnea(cmodel, cdata, q, dq, ddq)
